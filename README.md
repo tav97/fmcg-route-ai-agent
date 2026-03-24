@@ -7,7 +7,9 @@ A deterministic, heuristic-based AI agent that schedules FMCG deliveries using a
 
 ## 🌐 Live Demo
 
-**Live Demo at: 👉 https://tav97.github.io/fmcg-route-ai-agent/**
+**[👉 Try the interactive demo here](https://tav97.github.io/fmcg-route-ai-agent/)**
+
+---
 
 > After forking/pushing to GitHub, enable GitHub Pages (Settings → Pages → Branch: `main` → Root `/`) and replace `YOUR-USERNAME` with your GitHub username above.
 
