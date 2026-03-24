@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>FMCG Route AI Agent — Solver Demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d1117;
+      --surface: #161b22;
+      --surface2: #1c2433;
+      --border: #30363d;
+      --text: #e6edf3;
+      --muted: #8b949e;
+      --urgent: #f85149;
+      --watch: #e3b341;
+      --ok: #3fb950;
+      --accent: #58a6ff;
+      --truck1: #58a6ff;
+      --truck2: #3fb950;
+      --truck3: #e3b341;
+      --truck4: #bc8cff;
+      --radius: 8px;
+    }
+    body { font-family: 'Inter', sans-serif; background: var(--bg); color: var(--text); min-height: 100vh; }
+
+    /* ---- HEADER ---- */
+    header { background: var(--surface); border-bottom: 1px solid var(--border); padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+    header h1 { font-size: 1.1rem; font-weight: 600; color: var(--text); }
+    header p  { font-size: 0.8rem; color: var(--muted); margin-top: 2px; }
+    .header-actions { display: flex; gap: 10px; }
+    .btn { padding: 8px 16px; border-radius: var(--radius); font-family: inherit; font-size: 0.82rem; font-weight: 500; cursor: pointer; border: none; transition: opacity 0.15s; }
+    .btn:hover { opacity: 0.85; }
+    .btn-primary   { background: var(--accent); color: #000; }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-danger    { background: var(--urgent); color: #fff; }
+    .btn-green     { background: var(--ok); color: #000; }
+
+    /* ---- MAIN LAYOUT ---- */
+    .layout { display: grid; grid-template-columns: 260px 1fr 280px; gap: 0; height: calc(100vh - 57px); }
+
+    /* ---- SIDEBAR: OUTLETS ---- */
+    .sidebar { background: var(--surface); border-right: 1px solid var(--border); overflow-y: auto; }
+    .sidebar-header { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 0.75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; justify-content: space-between; }
+    .outlet-item { padding: 10px 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 4px; font-size: 0.8rem; }
+    .outlet-name { font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
+    .outlet-meta { color: var(--muted); font-size: 0.73rem; }
+    .badge { display: inline-block; padding: 1px 7px; border-radius: 20px; font-size: 0.68rem; font-weight: 600; }
+    .badge-urgent { background: rgba(248,81,73,0.2); color: var(--urgent); }
+    .badge-watch  { background: rgba(227,179,65,0.2); color: var(--watch); }
+    .badge-ok     { background: rgba(63,185,80,0.2); color: var(--ok); }
+    .zone-badge   { background: var(--surface2); color: var(--muted); font-size: 0.65rem; padding: 1px 6px; border-radius: 4px; border: 1px solid var(--border); }
+
+    /* ---- CENTER PANEL ---- */
+    .center { display: flex; flex-direction: column; overflow: hidden; }
+    .tabs { display: flex; border-bottom: 1px solid var(--border); background: var(--surface); }
+    .tab { padding: 12px 20px; font-size: 0.82rem; font-weight: 500; cursor: pointer; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all 0.15s; }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+    .panel { flex: 1; overflow-y: auto; padding: 20px; display: none; }
+    .panel.active { display: block; }
+
+    /* ---- SOLVER PANEL ---- */
+    .solver-controls { display: flex; gap: 10px; margin-bottom: 20px; }
+    .step-log { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px; font-size: 0.78rem; font-family: 'Courier New', monospace; min-height: 120px; color: var(--muted); }
+    .step-log .line { margin-bottom: 4px; }
+    .step-log .success { color: var(--ok); }
+    .step-log .info    { color: var(--accent); }
+    .step-log .warn    { color: var(--watch); }
+    .dispatch-table { width: 100%; border-collapse: collapse; font-size: 0.8rem; margin-top: 20px; }
+    .dispatch-table th { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); color: var(--muted); font-size: 0.72rem; font-weight: 600; text-transform: uppercase; }
+    .dispatch-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .dispatch-table tr:hover td { background: var(--surface2); }
+    .truck-color { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; }
+    .stops-list { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+    .stop-chip { padding: 2px 7px; background: var(--surface2); border: 1px solid var(--border); border-radius: 4px; font-size: 0.7rem; color: var(--muted); }
+    .stop-chip.urgent { border-color: var(--urgent); color: var(--urgent); }
+
+    /* ---- MAP PANEL ---- */
+    #mapCanvas { width: 100%; height: 100%; display: block; }
+    .map-wrapper { width: 100%; height: 100%; position: relative; }
+
+    /* ---- KPI SIDEBAR ---- */
+    .kpi-sidebar { background: var(--surface); border-left: 1px solid var(--border); padding: 0; overflow-y: auto; }
+    .kpi-header { padding: 14px 16px; border-bottom: 1px solid var(--border); font-size: 0.75rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .kpi-card { padding: 16px; border-bottom: 1px solid var(--border); }
+    .kpi-label { font-size: 0.72rem; color: var(--muted); margin-bottom: 6px; }
+    .kpi-value { font-size: 1.5rem; font-weight: 700; }
+    .kpi-sub   { font-size: 0.72rem; color: var(--muted); margin-top: 4px; }
+    .kpi-bar-bg { height: 6px; background: var(--surface2); border-radius: 3px; margin-top: 8px; }
+    .kpi-bar    { height: 6px; border-radius: 3px; transition: width 0.6s ease; }
+    .delta-pos  { color: var(--ok); }
+    .delta-neg  { color: var(--urgent); }
+    .truck-kpi  { padding: 12px 16px; border-bottom: 1px solid var(--border); }
+    .truck-kpi-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; font-size: 0.78rem; }
+    .truck-kpi-bar-bg { height: 4px; background: var(--surface2); border-radius: 2px; }
+    .truck-kpi-bar    { height: 4px; border-radius: 2px; transition: width 0.6s ease; }
+
+    /* ---- CSV MODAL ---- */
+    .modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.7); z-index: 999; display: none; align-items: center; justify-content: center; }
+    .modal-overlay.open { display: flex; }
+    .modal { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; width: 520px; max-width: 95vw; padding: 28px; position: relative; }
+    .modal h2 { font-size: 1rem; font-weight: 600; margin-bottom: 6px; }
+    .modal p  { font-size: 0.8rem; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
+    .drop-zone { border: 2px dashed var(--border); border-radius: var(--radius); padding: 32px; text-align: center; cursor: pointer; transition: border-color 0.2s; font-size: 0.82rem; color: var(--muted); }
+    .drop-zone:hover, .drop-zone.dragover { border-color: var(--accent); color: var(--accent); }
+    .drop-zone input { display: none; }
+    .schema-table { width: 100%; font-size: 0.75rem; margin: 16px 0; border-collapse: collapse; }
+    .schema-table th { text-align: left; color: var(--muted); padding: 5px 8px; border-bottom: 1px solid var(--border); }
+    .schema-table td { padding: 5px 8px; border-bottom: 1px solid var(--border); font-family: monospace; }
+    .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+    .error-msg { color: var(--urgent); font-size: 0.78rem; margin-top: 10px; display: none; }
+
+    /* ---- EMPTY STATE ---- */
+    .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--muted); font-size: 0.85rem; gap: 12px; text-align: center; }
+    .empty-state .icon { font-size: 2.5rem; }
+
+    /* ---- ANIMATION ---- */
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+    .animate-in { animation: fadeIn 0.3s ease; }
+  </style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div>
+    <h1>🚛 FMCG Route AI Agent</h1>
+    <p>Rule-Based Heuristic Optimization Engine — Demo</p>
+  </div>
+  <div class="header-actions">
+    <button class="btn btn-secondary" id="btnRandomize">🔀 Randomize Data</button>
+    <button class="btn btn-secondary" id="btnUploadCSV">📂 Upload CSV</button>
+    <button class="btn btn-primary"   id="btnRunSolver">▶ Run Solver</button>
+  </div>
+</header>
+
+<!-- MAIN LAYOUT -->
+<div class="layout">
+
+  <!-- LEFT: OUTLET ROSTER -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <span>Outlet Roster</span>
+      <span id="outletCount">— outlets</span>
+    </div>
+    <div id="outletList"></div>
+  </aside>
+
+  <!-- CENTER: SOLVER + MAP -->
+  <main class="center">
+    <div class="tabs">
+      <div class="tab active" data-tab="solver">📋 Solver Output</div>
+      <div class="tab" data-tab="map">🗺 Route Map</div>
+    </div>
+    <div class="panel active" id="panel-solver">
+      <div class="solver-controls">
+        <button class="btn btn-primary" id="btnRunSolver2">▶ Run Solver</button>
+        <button class="btn btn-secondary" id="btnClearLog">Clear</button>
+      </div>
+      <div class="step-log" id="stepLog">
+        <div class="line muted">Awaiting solver run... press "▶ Run Solver" to begin.</div>
+      </div>
+      <div id="dispatchContainer"></div>
+    </div>
+    <div class="panel map-wrapper" id="panel-map">
+      <canvas id="mapCanvas"></canvas>
+    </div>
+  </main>
+
+  <!-- RIGHT: KPI DASHBOARD -->
+  <aside class="kpi-sidebar">
+    <div class="kpi-header">KPI Dashboard</div>
+    <div class="kpi-card">
+      <div class="kpi-label">🚛 Fleet Utilization</div>
+      <div class="kpi-value" id="kpiUtil">—</div>
+      <div class="kpi-sub" id="kpiUtilSub">Run solver to calculate</div>
+      <div class="kpi-bar-bg"><div class="kpi-bar" id="kpiUtilBar" style="width:0%;background:var(--accent)"></div></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">📦 URGENT Outlets Served</div>
+      <div class="kpi-value" id="kpiUrgent">—</div>
+      <div class="kpi-sub" id="kpiUrgentSub">Run solver to calculate</div>
+      <div class="kpi-bar-bg"><div class="kpi-bar" id="kpiUrgentBar" style="width:0%;background:var(--urgent)"></div></div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">📈 On-Time Delivery Rate</div>
+      <div class="kpi-value" id="kpiOtd">—</div>
+      <div class="kpi-sub">Projected based on urgency fulfillment</div>
+    </div>
+    <div class="kpi-card">
+      <div class="kpi-label">🏭 Active Trucks</div>
+      <div class="kpi-value" id="kpiTrucks">—</div>
+      <div class="kpi-sub" id="kpiTrucksSub">Max fleet: 4</div>
+    </div>
+    <div class="kpi-header" style="margin-top:4px">Per-Truck Utilization</div>
+    <div id="truckKpis"></div>
+  </aside>
+</div>
+
+<!-- CSV UPLOAD MODAL -->
+<div class="modal-overlay" id="csvModal">
+  <div class="modal">
+    <h2>📂 Upload Demand Data (CSV)</h2>
+    <p>Upload a CSV file matching the schema below. The agent will validate the data before loading. <br/>Download the <a href="delivery_demand.csv" style="color:var(--accent);text-decoration:none" download>sample template</a> to get started.</p>
+
+    <table class="schema-table">
+      <tr><th>Column</th><th>Type</th><th>Description</th></tr>
+      <tr><td>outlet_id</td><td>string</td><td>Unique store identifier</td></tr>
+      <tr><td>zone</td><td>string</td><td>North / East / South / Central</td></tr>
+      <tr><td>current_inventory_stock</td><td>number</td><td>Units in store stockroom</td></tr>
+      <tr><td>average_weekly_offtake</td><td>number</td><td>Units sold per week on average</td></tr>
+      <tr><td>order_quantity_cases</td><td>number</td><td>Cases requested for this delivery</td></tr>
+      <tr><td>lat</td><td>number</td><td>Latitude of outlet</td></tr>
+      <tr><td>lon</td><td>number</td><td>Longitude of outlet</td></tr>
+    </table>
+
+    <div class="drop-zone" id="dropZone">
+      <div>⬆️ Drop your CSV here, or click to browse</div>
+      <input type="file" id="csvFileInput" accept=".csv"/>
+    </div>
+    <div class="error-msg" id="csvError"></div>
+
+    <div class="modal-actions">
+      <button class="btn btn-green" id="btnLoadCSV" disabled>Load Data</button>
+      <button class="btn btn-secondary" id="btnCloseModal">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ==================== CONSTANTS ====================
+const TRUCK_CAPACITY  = 100;
+const CAPACITY_TARGET = 0.85;
+const MAX_TRUCKS      = 4;
+const TRUCK_COLORS    = ['#58a6ff','#3fb950','#e3b341','#bc8cff'];
+const WH = { lat: 40.7128, lon: -74.0060 };
+
+// ==================== DATA ====================
+let outlets = generateOutlets();
+let lastResult = null;
+let parsedCSV  = null;
+
+function generateOutlets() {
+  const zones = ['North','East','South','Central'];
+  const offsets = { North:[0.02,0], East:[0,-0.02], South:[-0.02,0], Central:[0,0.01] };
+  const data = [];
+  zones.forEach((zone, zi) => {
+    const count = 10 + Math.floor(Math.random() * 3);
+    const [dlat, dlon] = offsets[zone];
+    for (let i = 0; i < count; i++) {
+      const stock   = Math.round(Math.random() * 100 + 5);
+      const offtake = Math.round(Math.random() * 18 + 4);
+      const order   = Math.round(Math.random() * 45 + 5);
+      data.push({
+        id: `${zone.substring(0,1)}${String(zi*10+i+1).padStart(2,'0')}`,
+        zone, stock, offtake, order,
+        lat: WH.lat + dlat + (Math.random()-0.5)*0.03,
+        lon: WH.lon + dlon + (Math.random()-0.5)*0.03
+      });
+    }
+  });
+  return data;
+}
+
+// ==================== TIER LOGIC ====================
+function getTier(o) {
+  const woc = o.offtake > 0 ? o.stock / o.offtake : 999;
+  if (woc < 2.5)  return { woc, tier: 'URGENT', priority: 1 };
+  if (woc <= 4.0) return { woc, tier: 'WATCH',  priority: 2 };
+  return              { woc, tier: 'OK',     priority: 3 };
+}
+
+// ==================== OUTLET LIST ====================
+function renderOutlets() {
+  const list = document.getElementById('outletList');
+  document.getElementById('outletCount').textContent = `${outlets.length} outlets`;
+  list.innerHTML = outlets.map(o => {
+    const { woc, tier } = getTier(o);
+    const cls = tier.toLowerCase();
+    return `<div class="outlet-item">
+      <div class="outlet-name">
+        <span>${o.id}</span>
+        <span class="badge badge-${cls}">${tier}</span>
+      </div>
+      <div class="outlet-meta">
+        <span class="zone-badge">${o.zone}</span>
+        &nbsp;WOC: ${woc.toFixed(1)}w &nbsp;·&nbsp; Order: ${o.order} cases
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ==================== SOLVER ====================
+async function runSolver() {
+  const log = document.getElementById('stepLog');
+  log.innerHTML = '';
+  document.getElementById('dispatchContainer').innerHTML = '';
+  clearKpi();
+
+  function append(msg, cls='') {
+    const d = document.createElement('div');
+    d.className = 'line ' + cls;
+    d.textContent = msg;
+    log.appendChild(d);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  await sleep(200);
+  append('▶ STEP 1 — Demand Signal Processing', 'info');
+  await sleep(300);
+
+  let urgent=0, watch=0, skip=0;
+  const eligible = [];
+  outlets.forEach(o => {
+    const { woc, tier, priority } = getTier(o);
+    o._woc = woc; o._tier = tier; o._priority = priority;
+    if (tier === 'OK') { skip++; return; }
+    if (tier === 'URGENT') urgent++;
+    else watch++;
+    eligible.push(o);
+  });
+  append(`  ✔ ${urgent} URGENT  |  ${watch} WATCH  |  ${skip} OK (skipped today)`, 'success');
+
+  await sleep(300);
+  append('▶ STEP 2 — Geographic Zone Clustering', 'info');
+  await sleep(300);
+  const zones = {};
+  eligible.forEach(o => { (zones[o.zone] = zones[o.zone]||[]).push(o); });
+  Object.entries(zones).forEach(([z,os]) => append(`  ✔ Zone ${z}: ${os.length} outlets eligible`, 'success'));
+
+  await sleep(300);
+  append('▶ STEP 3 — Greedy Load Building (85% cap)', 'info');
+  await sleep(300);
+  const trucks = [];
+  Object.entries(zones).forEach(([zone, zoneOutlets], ti) => {
+    if (ti >= MAX_TRUCKS) return;
+    zoneOutlets.sort((a,b) => a._priority - b._priority || b.order - a.order);
+    const manifest = []; let vol = 0;
+    const cap = TRUCK_CAPACITY * CAPACITY_TARGET;
+    zoneOutlets.forEach(o => {
+      if (vol + o.order <= cap) { manifest.push(o); vol += o.order; }
+    });
+    trucks.push({ zone, manifest, vol, color: TRUCK_COLORS[ti] });
+    append(`  ✔ Truck ${ti+1} (${zone}) → ${manifest.length} stops, ${vol} cases (${Math.round(vol/TRUCK_CAPACITY*100)}% util)`, 'success');
+  });
+
+  await sleep(300);
+  append('▶ STEP 4 — Nearest-Neighbour Stop Sequencing', 'info');
+  await sleep(300);
+  trucks.forEach((truck, ti) => {
+    const unvisited = [...truck.manifest];
+    let cur = WH; const route = [];
+    while (unvisited.length > 0) {
+      let best = null, bestDist = Infinity;
+      unvisited.forEach(o => {
+        const d = dist(cur, o);
+        if (d < bestDist) { bestDist = d; best = o; }
+      });
+      route.push(best);
+      unvisited.splice(unvisited.indexOf(best), 1);
+      cur = best;
+    }
+    truck.route = route;
+    append(`  ✔ Truck ${ti+1} route sequenced (${route.length} stops)`, 'success');
+  });
+
+  await sleep(300);
+  append('▶ STEP 5 — Generating Dispatch Plan', 'info');
+  await sleep(400);
+  append('─'.repeat(52));
+  trucks.forEach((t, i) => {
+    const hrs = (8 + t.route.length * 0.5 + t.vol * 0.01).toFixed(1);
+    append(`  Truck ${i+1} · ${t.zone.padEnd(8)} · ${t.route.length} stops · ${t.vol} cases · ~${hrs}h`);
+  });
+  append('─'.repeat(52));
+  append('✅ Solver run complete.', 'success');
+
+  lastResult = trucks;
+  renderDispatch(trucks);
+  renderKpi(trucks, urgent);
+  renderMap(trucks);
+}
+
+function dist(a, b) {
+  return Math.hypot(a.lat - b.lat, a.lon - b.lon);
+}
+
+function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// ==================== DISPATCH TABLE ====================
+function renderDispatch(trucks) {
+  const cont = document.getElementById('dispatchContainer');
+  const rows = trucks.map((t, i) => {
+    const stops = t.route.map(o =>
+      `<span class="stop-chip ${o._tier==='URGENT'?'urgent':''}">${o.id}</span>`
+    ).join('');
+    const hrs = (8 + t.route.length * 0.5 + t.vol * 0.01).toFixed(1);
+    return `<tr>
+      <td><span class="truck-color" style="background:${t.color}"></span>Truck ${i+1}</td>
+      <td>${t.zone}</td>
+      <td>${t.route.length}</td>
+      <td>${t.vol}</td>
+      <td>${Math.round(t.vol/TRUCK_CAPACITY*100)}%</td>
+      <td>~${hrs}h</td>
+      <td><div class="stops-list">${stops}</div></td>
+    </tr>`;
+  }).join('');
+  cont.innerHTML = `
+    <table class="dispatch-table animate-in">
+      <thead><tr>
+        <th>Truck</th><th>Zone</th><th>Stops</th><th>Cases</th><th>Util%</th><th>Est. Time</th><th>Stop Sequence</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+}
+
+// ==================== KPI ====================
+function clearKpi() {
+  ['kpiUtil','kpiUrgent','kpiOtd','kpiTrucks'].forEach(id => document.getElementById(id).textContent='—');
+  document.getElementById('kpiUtilBar').style.width='0%';
+  document.getElementById('kpiUrgentBar').style.width='0%';
+  document.getElementById('truckKpis').innerHTML='';
+  document.getElementById('kpiUtilSub').textContent='Run solver to calculate';
+  document.getElementById('kpiUrgentSub').textContent='Run solver to calculate';
+}
+
+function renderKpi(trucks, urgentCount) {
+  const totalCap    = trucks.length * TRUCK_CAPACITY;
+  const totalLoaded = trucks.reduce((s,t)=>s+t.vol,0);
+  const utilPct     = Math.round(totalLoaded / totalCap * 100);
+  const urgentServed= trucks.flatMap(t=>t.route).filter(o=>o._tier==='URGENT').length;
+  const urgentPct   = urgentCount > 0 ? Math.round(urgentServed/urgentCount*100) : 100;
+  const otd         = Math.min(99, 72 + Math.round(urgentPct * 0.19));
+
+  document.getElementById('kpiUtil').textContent    = utilPct + '%';
+  document.getElementById('kpiUtilSub').textContent = `${totalLoaded} / ${totalCap} cases loaded`;
+  document.getElementById('kpiUtilBar').style.width = utilPct + '%';
+  document.getElementById('kpiUtilBar').style.background = utilPct >= 70 ? 'var(--ok)' : utilPct >= 50 ? 'var(--watch)' : 'var(--urgent)';
+
+  document.getElementById('kpiUrgent').textContent    = `${urgentServed}/${urgentCount}`;
+  document.getElementById('kpiUrgentSub').textContent = urgentPct === 100 ? '✅ All URGENT served' : `⚠️ ${urgentCount-urgentServed} missed`;
+  document.getElementById('kpiUrgentBar').style.width = urgentPct + '%';
+  document.getElementById('kpiUrgentBar').style.background = urgentPct===100 ? 'var(--ok)' : 'var(--urgent)';
+
+  document.getElementById('kpiOtd').textContent    = otd + '%';
+  document.getElementById('kpiOtd').style.color    = otd >= 85 ? 'var(--ok)' : 'var(--watch)';
+  document.getElementById('kpiTrucks').textContent = trucks.length;
+  document.getElementById('kpiTrucksSub').textContent = `${trucks.length} / ${MAX_TRUCKS} trucks active`;
+
+  const tkpi = document.getElementById('truckKpis');
+  tkpi.innerHTML = trucks.map((t,i) => {
+    const pct = Math.round(t.vol/TRUCK_CAPACITY*100);
+    return `<div class="truck-kpi">
+      <div class="truck-kpi-row">
+        <span><span class="truck-color" style="background:${t.color}"></span>Truck ${i+1} (${t.zone})</span>
+        <span style="color:${t.color};font-weight:600">${pct}%</span>
+      </div>
+      <div class="truck-kpi-bar-bg"><div class="truck-kpi-bar" style="width:${pct}%;background:${t.color}"></div></div>
+      <div style="font-size:0.7rem;color:var(--muted);margin-top:4px">${t.vol} cases · ${t.route.length} stops</div>
+    </div>`;
+  }).join('');
+}
+
+// ==================== MAP ====================
+function renderMap(trucks) {
+  const canvas = document.getElementById('mapCanvas');
+  const wrap = canvas.parentElement;
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  const ctx = canvas.getContext('2d');
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+
+  // collect all points for projection
+  const all = outlets.map(o => ({lat:o.lat,lon:o.lon}));
+  all.push(WH);
+  const lats = all.map(p=>p.lat), lons = all.map(p=>p.lon);
+  const minLat=Math.min(...lats), maxLat=Math.max(...lats);
+  const minLon=Math.min(...lons), maxLon=Math.max(...lons);
+  const pad = 40;
+
+  function project(lat,lon) {
+    const x = pad + (lon-minLon)/(maxLon-minLon||1)*(canvas.width-pad*2);
+    const y = canvas.height-pad - (lat-minLat)/(maxLat-minLat||1)*(canvas.height-pad*2);
+    return {x,y};
+  }
+
+  // Background
+  ctx.fillStyle = '#0d1117';
+  ctx.fillRect(0,0,canvas.width,canvas.height);
+
+  // Draw route lines
+  trucks.forEach(truck => {
+    const stops = [WH, ...truck.route, WH];
+    ctx.strokeStyle = truck.color;
+    ctx.lineWidth = 2;
+    ctx.globalAlpha = 0.6;
+    ctx.setLineDash([]);
+    ctx.beginPath();
+    stops.forEach((stop,i) => {
+      const {x,y} = project(stop.lat,stop.lon);
+      i === 0 ? ctx.moveTo(x,y) : ctx.lineTo(x,y);
+    });
+    ctx.stroke();
+  });
+  ctx.globalAlpha = 1;
+
+  // Draw outlets
+  outlets.forEach(o => {
+    const { tier } = getTier(o);
+    const {x,y} = project(o.lat,o.lon);
+    const col = tier==='URGENT'?'#f85149': tier==='WATCH'?'#e3b341':'#3fb950';
+    ctx.fillStyle = col;
+    ctx.beginPath();
+    ctx.arc(x,y,5,0,Math.PI*2);
+    ctx.fill();
+    // label
+    ctx.fillStyle = '#e6edf3';
+    ctx.font = '9px Inter, sans-serif';
+    ctx.fillText(o.id, x+7, y+3);
+  });
+
+  // Warehouse star
+  const {x:wx,y:wy} = project(WH.lat,WH.lon);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '18px sans-serif';
+  ctx.fillText('★', wx-9, wy+6);
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '10px Inter';
+  ctx.fillText('WH', wx+8, wy+5);
+}
+
+// ==================== TABS ====================
+document.querySelectorAll('.tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+    document.querySelectorAll('.panel').forEach(p=>p.classList.remove('active'));
+    tab.classList.add('active');
+    document.getElementById('panel-'+tab.dataset.tab).classList.add('active');
+    if (tab.dataset.tab === 'map' && lastResult) renderMap(lastResult);
+  });
+});
+
+// ==================== CSV UPLOAD ====================
+const modal      = document.getElementById('csvModal');
+const dropZone   = document.getElementById('dropZone');
+const fileInput  = document.getElementById('csvFileInput');
+const btnLoad    = document.getElementById('btnLoadCSV');
+const errorMsg   = document.getElementById('csvError');
+
+document.getElementById('btnUploadCSV').addEventListener('click', () => modal.classList.add('open'));
+document.getElementById('btnCloseModal').addEventListener('click', closeModal);
+modal.addEventListener('click', e => { if (e.target === modal) closeModal(); });
+dropZone.addEventListener('click', () => fileInput.click());
+dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+dropZone.addEventListener('drop', e => { e.preventDefault(); dropZone.classList.remove('dragover'); handleFile(e.dataTransfer.files[0]); });
+fileInput.addEventListener('change', e => handleFile(e.target.files[0]));
+
+function closeModal() { modal.classList.remove('open'); parsedCSV=null; btnLoad.disabled=true; errorMsg.style.display='none'; dropZone.firstChild.textContent='⬆️ Drop your CSV here, or click to browse'; }
+
+function handleFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const result = validateCSV(e.target.result);
+    if (result.error) {
+      errorMsg.textContent = '❌ ' + result.error;
+      errorMsg.style.display = 'block';
+      btnLoad.disabled = true;
+      parsedCSV = null;
+    } else {
+      errorMsg.style.display = 'none';
+      parsedCSV = result.data;
+      btnLoad.disabled = false;
+      dropZone.querySelector('div').textContent = `✅ ${file.name} — ${result.data.length} outlets loaded`;
+    }
+  };
+  reader.readAsText(file);
+}
+
+const REQUIRED = ['outlet_id','zone','current_inventory_stock','average_weekly_offtake','order_quantity_cases','lat','lon'];
+
+function validateCSV(text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) return { error: 'CSV must have a header row and at least one data row.' };
+  const headers = lines[0].split(',').map(h=>h.trim());
+  for (const r of REQUIRED) {
+    if (!headers.includes(r)) return { error: `Missing required column: "${r}"` };
+  }
+  const data = [];
+  for (let i = 1; i < lines.length; i++) {
+    const vals = lines[i].split(',');
+    const row = {};
+    headers.forEach((h,j) => row[h] = vals[j]?.trim());
+    for (const num of ['current_inventory_stock','average_weekly_offtake','order_quantity_cases','lat','lon']) {
+      if (isNaN(parseFloat(row[num]))) return { error: `Row ${i+1}: "${num}" must be a number.` };
+    }
+    if (!row.zone || !row.outlet_id) return { error: `Row ${i+1}: outlet_id and zone are required.` };
+    data.push({
+      id: row.outlet_id, zone: row.zone,
+      stock: parseFloat(row.current_inventory_stock),
+      offtake: parseFloat(row.average_weekly_offtake),
+      order: parseFloat(row.order_quantity_cases),
+      lat: parseFloat(row.lat), lon: parseFloat(row.lon)
+    });
+  }
+  return { data };
+}
+
+document.getElementById('btnLoadCSV').addEventListener('click', () => {
+  if (!parsedCSV) return;
+  outlets = parsedCSV;
+  renderOutlets();
+  closeModal();
+  document.getElementById('dispatchContainer').innerHTML='';
+  document.getElementById('stepLog').innerHTML='<div class="line muted">CSV loaded — press ▶ Run Solver to solve.</div>';
+  clearKpi(); lastResult=null;
+});
+
+// ==================== CONTROLS ====================
+document.getElementById('btnRunSolver').addEventListener('click', runSolver);
+document.getElementById('btnRunSolver2').addEventListener('click', runSolver);
+document.getElementById('btnClearLog').addEventListener('click', () => {
+  document.getElementById('stepLog').innerHTML='<div class="line muted">Log cleared.</div>';
+  document.getElementById('dispatchContainer').innerHTML='';
+});
+document.getElementById('btnRandomize').addEventListener('click', () => {
+  outlets = generateOutlets();
+  renderOutlets();
+  document.getElementById('dispatchContainer').innerHTML='';
+  document.getElementById('stepLog').innerHTML='<div class="line muted">Data randomized — press ▶ Run Solver to solve.</div>';
+  clearKpi(); lastResult=null;
+});
+
+// ==================== INIT ====================
+renderOutlets();
+</script>
+</body>
+</html>
